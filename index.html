@@ -127,6 +127,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f0fdf4;color:#0f172a
 .deploy-card{margin-top:18px;background:#f0fdf4;border-radius:12px;padding:15px;border:1px solid #bbf7d0}
 .deploy-title{font-weight:700;font-size:13px;color:#166534;margin-bottom:8px}
 .deploy-steps{padding-left:17px;font-size:12px;color:#166534;line-height:2.2}
+.qr-dl-btn{display:inline-block;margin-top:7px;padding:5px 12px;background:#f0fdf4;border:1.5px solid #10b981;border-radius:8px;font-size:11px;font-weight:700;color:#059669;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif}
+.qr-dl-btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* ===== TOAST ===== */
 .toast{position:fixed;top:75px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:200;white-space:nowrap;pointer-events:none;transition:opacity .3s}
@@ -998,10 +1000,9 @@ function renderQR(c) {
         <div class="qr-room-name">${room.emoji} ${room.name}</div>
         <div class="qr-room-meta">${room.kode} · ${room.lokasi}</div>
         <div class="qr-url">${url}</div>
-        <a href="${qrSrc}" download="QR-${room.id}.png"
-          style="display:inline-block;margin-top:7px;padding:5px 12px;background:#f0fdf4;border:1.5px solid #10b981;border-radius:8px;font-size:11px;font-weight:700;color:#059669;text-decoration:none">
+        <button class="qr-dl-btn" id="dl-${room.id}" onclick="downloadQR('${room.id}','${room.name}')">
           ⬇ Unduh QR
-        </a>
+        </button>
       </div>
     </div>`;
   });
@@ -1018,6 +1019,29 @@ function renderQR(c) {
   c.innerHTML=html;
 }
 
+// ==================== DOWNLOAD QR ====================
+async function downloadQR(roomId, roomName) {
+  if(!confirm(`Unduh QR Code untuk ${roomName}?`)) return;
+  const btn = document.getElementById(`dl-${roomId}`);
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Mengunduh...'; }
+  try {
+    const baseUrl = 'https://puskesmas-loaduri.vercel.app'; // samakan dengan baseUrl di renderQR
+    const url = `${baseUrl}?room=${roomId}`;
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=300x300&bgcolor=ffffff&margin=8`;
+    const resp = await fetch(qrSrc);
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `QR-${roomName}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Unduh QR'; }
+  } catch(e) {
+    showToast('⚠ Gagal mengunduh QR. Cek koneksi.','error');
+    if(btn){ btn.disabled=false; btn.textContent='⬇ Unduh QR'; }
+  }
+}
+  
 // ==================== INIT ====================
 // Cek apakah dibuka dari QR code (ada parameter ?room=...)
 (async function init() {
