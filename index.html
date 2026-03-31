@@ -133,6 +133,105 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f0fdf4;color:#0f172a
 .qr-dl-btn{display:inline-block;margin-top:7px;padding:5px 12px;background:#f0fdf4;border:1.5px solid #10b981;border-radius:8px;font-size:11px;font-weight:700;color:#059669;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif}
 .qr-dl-btn:disabled{opacity:.5;cursor:not-allowed}
 
+/* ===== NOTIF BANNER ===== */
+.notif-banner{background:#fff;border-radius:14px;padding:15px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.notif-banner-icon{font-size:28px;flex-shrink:0}
+.notif-banner-text{flex:1}
+.notif-banner-title{font-weight:700;font-size:13px;color:#0f172a}
+.notif-banner-sub{font-size:11px;color:#64748b;margin-top:2px}
+.notif-btn{padding:8px 14px;border-radius:9px;border:none;font-family:'Plus Jakarta Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.notif-btn-on{background:#d1fae5;color:#059669}
+.notif-btn-off{background:#fee2e2;color:#dc2626}
+.notif-btn-ask{background:linear-gradient(135deg,#0f766e,#0d9488);color:#fff}
+
+// ==================== NOTIFIKASI ====================
+const NOTIF_HOUR = 8;
+const NOTIF_MINUTE = 0;
+
+async function initNotif() {
+  if(!('serviceWorker' in navigator) || !('Notification' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    // Kirim jadwal ke service worker
+    if(reg.active) {
+      reg.active.postMessage({
+        type: 'SCHEDULE_NOTIF',
+        hour: NOTIF_HOUR,
+        minute: NOTIF_MINUTE
+      });
+    }
+    // Tunggu sampai SW aktif kalau belum
+    navigator.serviceWorker.ready.then(r => {
+      r.active?.postMessage({
+        type: 'SCHEDULE_NOTIF',
+        hour: NOTIF_HOUR,
+        minute: NOTIF_MINUTE
+      });
+    });
+  } catch(e) {
+    console.warn('SW register gagal:', e);
+  }
+}
+
+function getNotifStatus() {
+  if(!('Notification' in window)) return 'unsupported';
+  return Notification.permission; // 'default' | 'granted' | 'denied'
+}
+
+async function requestNotif() {
+  const perm = await Notification.requestPermission();
+  if(perm === 'granted') {
+    await initNotif();
+    showToast('✓ Notifikasi pengingat aktif!');
+  } else {
+    showToast('⚠ Izin notifikasi ditolak.','error');
+  }
+  // Re-render banner di dashboard
+  S.dashLoaded = false;
+  loadDashboard();
+}
+
+function buildNotifBanner() {
+  const status = getNotifStatus();
+  if(status === 'unsupported') return '';
+
+  if(status === 'granted') {
+    return `<div class="notif-banner">
+      <div class="notif-banner-icon">🔔</div>
+      <div class="notif-banner-text">
+        <div class="notif-banner-title">Notifikasi Aktif</div>
+        <div class="notif-banner-sub">Pengingat harian jam 08.00 sudah aktif di perangkat ini</div>
+      </div>
+      <button class="notif-btn notif-btn-off" onclick="disableNotif()">Matikan</button>
+    </div>`;
+  }
+
+  if(status === 'denied') {
+    return `<div class="notif-banner">
+      <div class="notif-banner-icon">🔕</div>
+      <div class="notif-banner-text">
+        <div class="notif-banner-title">Notifikasi Diblokir</div>
+        <div class="notif-banner-sub">Aktifkan manual di pengaturan browser → izin notifikasi</div>
+      </div>
+    </div>`;
+  }
+
+  // default — belum diminta
+  return `<div class="notif-banner">
+    <div class="notif-banner-icon">🔔</div>
+    <div class="notif-banner-text">
+      <div class="notif-banner-title">Aktifkan Pengingat Harian</div>
+      <div class="notif-banner-sub">Notifikasi jam 08.00 setiap Senin–Sabtu (UGD setiap hari)</div>
+    </div>
+    <button class="notif-btn notif-btn-ask" onclick="requestNotif()">Aktifkan</button>
+  </div>`;
+}
+
+async function disableNotif() {
+  // Tidak bisa cabut izin via JS — arahkan ke pengaturan browser
+  showToast('Matikan notifikasi di pengaturan browser → izin situs', 'error');
+}
+  
 /* ===== EXPORT ===== */
 .export-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
 .export-card-title{font-weight:700;font-size:14px;color:#0f172a;margin-bottom:4px}
@@ -797,8 +896,8 @@ function renderDashboard(c) {
       <div class="hero-stat"><div class="hero-stat-num">${total}</div><div class="hero-stat-lbl">Total Ruangan</div></div>
     </div>
   </div>
+  ${buildNotifBanner()}
   <div class="sec-label">Ruangan</div>`;
-
   ROOMS.forEach(room=>{
     const comp=S.dashCache[room.id];
     if(!comp){
@@ -1351,7 +1450,17 @@ async function downloadQR(roomId, roomName) {
     // Langsung buka form ruangan yang dituju
     await openRoom(roomParam);
   } else {
-    loadDashboard();
+    (async function init() {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if(roomParam && ROOMS.find(r => r.id === roomParam)) {
+        await openRoom(roomParam);
+      } else {
+        loadDashboard();
+      }
+      // Aktifkan SW kalau izin sudah diberikan sebelumnya
+      if(getNotifStatus() === 'granted') initNotif();
+    })();
   }
 })();
 </script>
