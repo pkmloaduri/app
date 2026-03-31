@@ -8,8 +8,11 @@
 
 <!-- ✅ Firebase SDK via CDN (tidak perlu npm/Node.js) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script> 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
@@ -130,6 +133,17 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f0fdf4;color:#0f172a
 .qr-dl-btn{display:inline-block;margin-top:7px;padding:5px 12px;background:#f0fdf4;border:1.5px solid #10b981;border-radius:8px;font-size:11px;font-weight:700;color:#059669;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif}
 .qr-dl-btn:disabled{opacity:.5;cursor:not-allowed}
 
+/* ===== EXPORT ===== */
+.export-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:14px}
+.export-card-title{font-weight:700;font-size:14px;color:#0f172a;margin-bottom:4px}
+.export-card-sub{font-size:12px;color:#64748b;margin-bottom:14px}
+.export-btn{width:100%;padding:13px;border-radius:11px;border:none;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s}
+.export-btn:disabled{opacity:.5;cursor:not-allowed}
+.export-btn-excel{background:linear-gradient(135deg,#166534,#15803d);color:#fff;box-shadow:0 4px 14px rgba(22,101,52,.25)}
+.export-btn-pdf{background:linear-gradient(135deg,#991b1b,#dc2626);color:#fff;box-shadow:0 4px 14px rgba(153,27,27,.25)}
+.export-info{background:#f0fdf4;border-radius:10px;padding:11px 14px;font-size:11px;color:#166534;border-left:3px solid #10b981;line-height:1.7}
+.export-month-sel{width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;background:#fff;outline:none;margin-bottom:14px}
+  
 /* ===== TOAST ===== */
 .toast{position:fixed;top:75px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:20px;font-size:13px;font-weight:700;z-index:200;white-space:nowrap;pointer-events:none;transition:opacity .3s}
 .toast.success{background:#059669;color:#fff}
@@ -203,6 +217,9 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f0fdf4;color:#0f172a
     </button>
     <button class="navbtn" id="nav-rekap" onclick="navigate('rekap')">
       <span class="navicon">📊</span>Rekap
+    </button>
+    <button class="navbtn" id="nav-export" onclick="navigate('export')">
+      <span class="navicon">📤</span>Export
     </button>
     <button class="navbtn" id="nav-qr" onclick="navigate('qr')">
       <span class="navicon">📱</span>QR Code
@@ -461,6 +478,7 @@ function navigate(view) {
   updateTopbar();
   if(view==='dashboard') loadDashboard();
   else if(view==='rekap') loadRekap();
+  else if(view==='export') render();  
   else render();
 }
 
@@ -759,7 +777,7 @@ function render() {
   if(S.view==='dashboard') renderDashboard(c);
   else if(S.view==='form') renderForm(c);
   else if(S.view==='rekap') renderRekap(c);
-  else if(S.view==='qr') renderQR(c);
+  else if(S.view==='export') renderExport(c);
 }
 
 // ---- DASHBOARD ----
@@ -1060,6 +1078,247 @@ function renderQR(c) {
   c.innerHTML=html;
 }
 
+// ==================== EXPORT ====================
+function renderExport(c) {
+  c.innerHTML=`
+  <div class="page-title">📤 Export Data</div>
+  <input type="month" class="export-month-sel" id="exportMonthSel"
+    value="${S.selectedMonth}" onchange="S.exportMonth=this.value">
+
+  <div class="export-card">
+    <div class="export-card-title">📊 Export Excel (.xlsx)</div>
+    <div class="export-card-sub">
+      Berisi 3 sheet: Ringkasan semua ruangan, Log masalah (Rusak & Perbaikan), dan detail tiap ruangan.
+    </div>
+    <button class="export-btn export-btn-excel" id="btnExcel" onclick="exportExcel()">
+      📥 Unduh Excel
+    </button>
+    <div class="export-info">
+      ✓ Sheet Ringkasan — jumlah hari lengkap/sebagian/masalah per ruangan<br>
+      ✓ Sheet Log Masalah — daftar item rusak & perbaikan lengkap dengan tanggal + verifikator<br>
+      ✓ Sheet per Ruangan — kondisi tiap item setiap hari
+    </div>
+  </div>
+
+  <div class="export-card">
+    <div class="export-card-title">📄 Export PDF</div>
+    <div class="export-card-sub">
+      Ringkasan + Log Masalah dalam format PDF siap cetak atau kirim via WhatsApp/email.
+    </div>
+    <button class="export-btn export-btn-pdf" id="btnPdf" onclick="exportPDF()">
+      📥 Unduh PDF
+    </button>
+    <div class="export-info">
+      ✓ Halaman Ringkasan — tabel semua ruangan<br>
+      ✓ Halaman Log Masalah — tabel item bermasalah lengkap
+    </div>
+  </div>`;
+  S.exportMonth = S.selectedMonth;
+}
+
+async function fetchAllRoomsMonth(ym) {
+  showLoading();
+  const allData = {};
+  try {
+    await Promise.all(ROOMS.map(async r => {
+      allData[r.id] = await fbLoadMonth(r.id, ym);
+    }));
+  } catch(e) {
+    showToast('⚠ Gagal memuat data. Cek koneksi.','error');
+  }
+  hideLoading();
+  return allData;
+}
+
+function buildSummaryRows(allData, ym) {
+  return ROOMS.map(room => {
+    const days = getDaysInMonth(ym);
+    let lengkap=0, sebagian=0, masalah=0, belum=0;
+    for(let i=1;i<=days;i++){
+      const dk=`${ym}-${pad(i)}`;
+      const dd=allData[room.id]?.[dk];
+      if(!dd){ belum++; continue; }
+      const total=room.items.length;
+      const ok=room.items.filter(it=>dd.items?.[it.id]?.a==='ok').length;
+      const rusak=room.items.filter(it=>dd.items?.[it.id]?.a==='rusak').length;
+      if(rusak>0) masalah++;
+      else if(ok===total) lengkap++;
+      else if(ok>0) sebagian++;
+      else belum++;
+    }
+    return [room.emoji+' '+room.name, room.kode, room.lokasi, lengkap, sebagian, masalah, belum];
+  });
+}
+
+function buildLogRows(allData, ym) {
+  const rows = [];
+  const days = getDaysInMonth(ym);
+  ROOMS.forEach(room => {
+    for(let i=1;i<=days;i++){
+      const dk=`${ym}-${pad(i)}`;
+      const dd=allData[room.id]?.[dk];
+      if(!dd) continue;
+      room.items.forEach(item => {
+        const a=dd.items?.[item.id]?.a;
+        if(a==='rusak'||a==='perbaikan'){
+          rows.push([
+            dk,
+            room.emoji+' '+room.name,
+            item.name,
+            a==='rusak'?'Rusak':'Dalam Perbaikan',
+            dd.verifikator||'-',
+            dd.isBackdated?'Ya':'Tidak',
+          ]);
+        }
+      });
+    }
+  });
+  return rows;
+}
+
+async function exportExcel() {
+  const ym = S.exportMonth || S.selectedMonth;
+  const btn = document.getElementById('btnExcel');
+  btn.disabled=true; btn.textContent='⏳ Menyiapkan...';
+
+  const allData = await fetchAllRoomsMonth(ym);
+  const wb = XLSX.utils.book_new();
+  const monthLabel = formatMonthYear(ym);
+
+  // ── Sheet 1: Ringkasan ──
+  const sumHeader = [['REKAP PEMELIHARAAN LINGKUNGAN KERJA — '+monthLabel.toUpperCase()]];
+  const sumCols   = [['Ruangan','Kode','Lokasi','✓ Lengkap','~ Sebagian','! Masalah','○ Belum']];
+  const sumRows   = buildSummaryRows(allData, ym);
+  const wsSum = XLSX.utils.aoa_to_sheet([...sumHeader, [], ...sumCols, ...sumRows]);
+  wsSum['!cols'] = [{wch:28},{wch:8},{wch:8},{wch:10},{wch:10},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsSum, 'Ringkasan');
+
+  // ── Sheet 2: Log Masalah ──
+  const logHeader = [['LOG MASALAH — '+monthLabel.toUpperCase()]];
+  const logCols   = [['Tanggal','Ruangan','Item','Status','Verifikator','Backdate?']];
+  const logRows   = buildLogRows(allData, ym);
+  const wsLog = XLSX.utils.aoa_to_sheet([
+    ...logHeader, [],
+    ...logCols,
+    ...(logRows.length > 0 ? logRows : [['(Tidak ada masalah tercatat di bulan ini)']]),
+  ]);
+  wsLog['!cols'] = [{wch:12},{wch:28},{wch:22},{wch:18},{wch:20},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsLog, 'Log Masalah');
+
+  // ── Sheet per Ruangan ──
+  const days = getDaysInMonth(ym);
+  const dayNums = Array.from({length:days},(_,i)=>i+1);
+
+  ROOMS.forEach(room => {
+    const header1 = [room.name.toUpperCase()+' ('+room.kode+') — '+monthLabel.toUpperCase()];
+    const header2 = ['Item / Hari ke-', ...dayNums];
+    const itemRows = room.items.map(item => {
+      const cols = [item.name];
+      for(let i=1;i<=days;i++){
+        const dk=`${ym}-${pad(i)}`;
+        const a=allData[room.id]?.[dk]?.items?.[item.id]?.a;
+        cols.push(a==='ok'?'✓':a==='rusak'?'R':a==='perbaikan'?'P':'');
+      }
+      return cols;
+    });
+    const veriRow = ['Verifikator', ...dayNums.map(i=>{
+      const dk=`${ym}-${pad(i)}`;
+      return allData[room.id]?.[dk]?.verifikator||'';
+    })];
+    const keteranganRow = ['','Keterangan: ✓=Sesuai  R=Rusak  P=Dalam Perbaikan'];
+
+    const ws = XLSX.utils.aoa_to_sheet([
+      [header1[0]], [],
+      header2,
+      ...itemRows,
+      [],
+      veriRow,
+      [],
+      keteranganRow,
+    ]);
+    ws['!cols'] = [{wch:22}, ...dayNums.map(()=>({wch:4}))];
+    XLSX.utils.book_append_sheet(wb, ws, room.name.substring(0,31));
+  });
+
+  XLSX.writeFile(wb, `Rekap_PuskesmasLoaDuri_${ym}.xlsx`);
+  btn.disabled=false; btn.innerHTML='📥 Unduh Excel';
+  showToast('✓ File Excel berhasil diunduh!');
+}
+
+async function exportPDF() {
+  const ym = S.exportMonth || S.selectedMonth;
+  const btn = document.getElementById('btnPdf');
+  btn.disabled=true; btn.textContent='⏳ Menyiapkan...';
+
+  const allData = await fetchAllRoomsMonth(ym);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const monthLabel = formatMonthYear(ym);
+
+  // ── Halaman 1: Ringkasan ──
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('REKAP PEMELIHARAAN LINGKUNGAN KERJA', 14, 18);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text('Puskesmas Loa Duri  |  '+monthLabel, 14, 25);
+  doc.setDrawColor(15,118,110); doc.setLineWidth(0.5);
+  doc.line(14, 28, 196, 28);
+
+  const sumRows = buildSummaryRows(allData, ym);
+  doc.autoTable({
+    startY: 32,
+    head: [['Ruangan','Kode','Lok.','✓ Lengkap','~ Sebagian','! Masalah','○ Belum']],
+    body: sumRows,
+    styles:{ fontSize:9, font:'helvetica' },
+    headStyles:{ fillColor:[15,118,110], textColor:255, fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[240,253,244] },
+    columnStyles:{
+      0:{cellWidth:55}, 1:{cellWidth:14}, 2:{cellWidth:10},
+      3:{cellWidth:22,halign:'center'}, 4:{cellWidth:22,halign:'center'},
+      5:{cellWidth:22,halign:'center'}, 6:{cellWidth:22,halign:'center'},
+    },
+    margin:{ left:14, right:14 },
+  });
+
+  // ── Halaman 2+: Log Masalah ──
+  doc.addPage();
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text('LOG MASALAH', 14, 18);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text('Item Rusak & Dalam Perbaikan  |  '+monthLabel, 14, 25);
+  doc.line(14, 28, 196, 28);
+
+  const logRows = buildLogRows(allData, ym);
+  doc.autoTable({
+    startY: 32,
+    head: [['Tanggal','Ruangan','Item','Status','Verifikator','Backdate']],
+    body: logRows.length > 0 ? logRows : [['—','Tidak ada masalah tercatat','','','','']],
+    styles:{ fontSize:8.5, font:'helvetica' },
+    headStyles:{ fillColor:[153,27,27], textColor:255, fontStyle:'bold' },
+    alternateRowStyles:{ fillColor:[254,242,242] },
+    columnStyles:{
+      0:{cellWidth:22}, 1:{cellWidth:45}, 2:{cellWidth:38},
+      3:{cellWidth:28}, 4:{cellWidth:33}, 5:{cellWidth:18,halign:'center'},
+    },
+    margin:{ left:14, right:14 },
+  });
+
+  // Footer tiap halaman
+  const pageCount = doc.internal.getNumberOfPages();
+  for(let i=1;i<=pageCount;i++){
+    doc.setPage(i);
+    doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.setTextColor(148,163,184);
+    doc.text(
+      `Puskesmas Loa Duri  |  Dicetak: ${formatDate(getToday())}  |  Hal ${i} / ${pageCount}`,
+      14, 290
+    );
+  }
+
+  doc.save(`Rekap_PuskesmasLoaDuri_${ym}.pdf`);
+  btn.disabled=false; btn.innerHTML='📥 Unduh PDF';
+  showToast('✓ File PDF berhasil diunduh!');
+}  
+  
 // ==================== DOWNLOAD QR ====================
 async function downloadQR(roomId, roomName) {
   if(!confirm(`Unduh QR Code untuk ${roomName}?`)) return;
