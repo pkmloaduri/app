@@ -99,6 +99,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f0fdf4;color:#0f172a
 .lantai-tab.active{border-color:#0d9488;background:#ccfbf1;color:#0f766e}
 .room-search{flex:1;padding:8px 11px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;background:#fff}
 .room-search:focus{border-color:#0d9488}
+/* ===== DASHBOARD FILTER ===== */
+.dash-filter-row{display:flex;gap:8px;margin-bottom:12px;align-items:center}
 .rekap-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
 .rek-stat{border-radius:10px;padding:10px;text-align:center}
 .rek-stat-num{font-size:22px;font-weight:800}
@@ -633,6 +635,8 @@ let S = {
   rekapLantaiFilter: 'semua',
   rekapSearch: '',
   dashCache: {}, dashLoaded: false,
+  dashLantaiFilter: 'semua',
+  dashSearch: '',
   exportMonth: getYearMonth(new Date()),
 };
 
@@ -676,6 +680,8 @@ function calcCompletion(room, doc) {
 // ==================== NAVIGATION ====================
 function navigate(view) {
   S.view=view;
+  // Simpan tab aktif kecuali form
+  if(view!=='form') sessionStorage.setItem('lastView', view);
   document.querySelectorAll('.navbtn').forEach(b=>b.classList.remove('active'));
   document.getElementById(`nav-${view}`)?.classList.add('active');
   document.getElementById('backBtn').style.display='none';
@@ -835,8 +841,20 @@ function setRekapSearch(val) {
     return matchLantai&&(r.name.toLowerCase().includes(val.toLowerCase())||r.kode.toLowerCase().includes(val.toLowerCase()));
   });
   if(filtered.length>0) S.rekapRoomId=filtered[0].id;
-  loadRekap();
-} 
+
+  // Update hanya dropdown, TIDAK re-render seluruh halaman
+  const sel=document.getElementById('rekapRoomSel');
+  if(sel){
+    sel.innerHTML=filtered.length>0
+      ? filtered.map(r=>`<option value="${r.id}"${r.id===S.rekapRoomId?' selected':''}>${r.emoji} ${r.name}</option>`).join('')
+      : `<option disabled>Tidak ada ruangan ditemukan</option>`;
+  }
+
+  // Load data rekap untuk ruangan yang baru dipilih
+  const key=`${S.rekapRoomId}_${S.selectedMonth}`;
+  if(!S.rekapCache[key]) loadRekap();
+  else renderRekap();
+}
 async function changeMonth(val){ S.selectedMonth=val; await loadRekap(); }
 
 function getMonthlyData(roomId, ym) {
@@ -988,15 +1006,60 @@ function render() {
 // ---- DASHBOARD ----
 function renderDashboard(c) {
   const today=getToday(), total=ROOMS.length, done=ROOMS.filter(r=>S.dashCache[r.id]?.done).length, loaded=S.dashLoaded;
+  
+  // Filter ruangan
+  const filteredRooms=ROOMS.filter(r=>{
+    const matchLantai=S.dashLantaiFilter==='semua'||r.lokasi===S.dashLantaiFilter;
+    const matchSearch=r.name.toLowerCase().includes(S.dashSearch.toLowerCase())||r.kode.toLowerCase().includes(S.dashSearch.toLowerCase());
+    return matchLantai&&matchSearch;
+  });
+  
   let html=`<div class="hero"><div class="hero-date">${formatDate(today)}</div><div class="hero-greeting">Halo! 👋</div><div class="hero-sub">Puskesmas Loa Duri</div><div class="hero-stats"><div class="hero-stat"><div class="hero-stat-num">${loaded?done:'–'}</div><div class="hero-stat-lbl">Selesai</div></div><div class="hero-stat"><div class="hero-stat-num">${loaded?(total-done):'–'}</div><div class="hero-stat-lbl">Belum Diisi</div></div><div class="hero-stat"><div class="hero-stat-num">${total}</div><div class="hero-stat-lbl">Total Ruangan</div></div></div></div>
   ${buildNotifBanner()}
-  <div class="sec-label">Ruangan</div>`;
-  ROOMS.forEach(room=>{
+  <div class="dash-filter-row">
+    <div class="lantai-tabs">
+      <button class="lantai-tab${S.dashLantaiFilter==='semua'?' active':''}" onclick="setDashLantai('semua')">Semua</button>
+      <button class="lantai-tab${S.dashLantaiFilter==='Lt 1'?' active':''}" onclick="setDashLantai('Lt 1')">Lt 1</button>
+      <button class="lantai-tab${S.dashLantaiFilter==='Lt 2'?' active':''}" onclick="setDashLantai('Lt 2')">Lt 2</button>
+    </div>
+    <input type="search" class="room-search" placeholder="🔍 Cari ruangan..."
+      value="${S.dashSearch}"
+      oninput="S.dashSearch=this.value;renderDashboardRooms()"
+      id="dashSearchInput">
+  </div>
+  <div class="sec-label">Ruangan ${filteredRooms.length<ROOMS.length?`(${filteredRooms.length} ditemukan)`:''}</div>
+  <div id="dashRoomList"></div>`;
+
+  c.innerHTML=html;
+  renderDashboardRooms();
+
+  // Kembalikan focus jika search aktif
+  if(S.dashSearch) {
+    const inp=document.getElementById('dashSearchInput');
+    if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+  }
+}
+
+function renderDashboardRooms() {
+  const el=document.getElementById('dashRoomList');
+  if(!el) return;
+  const filteredRooms=ROOMS.filter(r=>{
+    const matchLantai=S.dashLantaiFilter==='semua'||r.lokasi===S.dashLantaiFilter;
+    const matchSearch=r.name.toLowerCase().includes(S.dashSearch.toLowerCase())||r.kode.toLowerCase().includes(S.dashSearch.toLowerCase());
+    return matchLantai&&matchSearch;
+  });
+  if(filteredRooms.length===0){ el.innerHTML=`<div style="text-align:center;padding:30px 0;color:#94a3b8;font-size:13px">Ruangan tidak ditemukan</div>`; return; }
+  let html='';
+  filteredRooms.forEach(room=>{
     const comp=S.dashCache[room.id];
     if(!comp){ html+=`<div class="room-card"><div class="room-emoji">${room.emoji}</div><div class="room-info"><div class="room-name">${room.name}</div><div class="room-meta">${room.kode} · ${room.lokasi}</div><div class="skel" style="width:70%;height:4px;margin-top:8px"></div></div><div class="skel" style="width:44px;height:22px;border-radius:20px"></div></div>`; return; }
     html+=`<div class="room-card${comp.done?' done':''}" onclick="openRoom('${room.id}')"><div class="room-emoji">${room.emoji}</div><div class="room-info"><div class="room-name">${room.name}</div><div class="room-meta">${room.kode} · ${room.lokasi} · ${room.items.length} item</div>${comp.filled>0?`<div class="room-progress"><div class="room-progress-fill${comp.done?' done':''}" style="width:${comp.pct}%"></div></div>`:''}${comp.verifikator?`<div class="room-vname">✓ ${comp.verifikator}</div>`:''}</div><div class="room-pct${comp.done?' done':''}">${comp.filled>0?comp.pct+'%':'Belum'}</div></div>`;
   });
-  c.innerHTML=html;
+  el.innerHTML=html;
+}
+  function setDashLantai(val) {
+  S.dashLantaiFilter=val; S.dashSearch='';
+  renderDashboard(document.getElementById('mainContent'));
 }
 
 // ---- FORM ----
@@ -1076,10 +1139,11 @@ function renderRekap(c) {
       <button class="lantai-tab${S.rekapLantaiFilter==='Lt 2'?' active':''}" onclick="setLantaiFilter('Lt 2')">Lt 2</button>
     </div>
     <input type="search" class="room-search" placeholder="🔍 Cari ruangan..."
-      value="${S.rekapSearch}" oninput="setRekapSearch(this.value)">
+      value="${S.rekapSearch}" oninput="S.rekapSearch=this.value;setRekapSearch(this.value)"
+id="rekapSearchInput">
   </div>
 
-  <select class="room-sel" onchange="changeRekapRoom(this.value)">
+  <select class="room-sel" id="rekapRoomSel" onchange="changeRekapRoom(this.value)">
     ${filteredRooms.length>0
       ? filteredRooms.map(r=>`<option value="${r.id}"${r.id===S.rekapRoomId?' selected':''}>${r.emoji} ${r.name}</option>`).join('')
       : `<option disabled>Tidak ada ruangan ditemukan</option>`}
@@ -1106,9 +1170,20 @@ function renderQR(c) {
 
 // ==================== INIT ====================
 (async function init() {
-  const params=new URLSearchParams(window.location.search), roomParam=params.get('room');
-  if(roomParam&&ROOMS.find(r=>r.id===roomParam)) await openRoom(roomParam);
-  else loadDashboard();
+  const params=new URLSearchParams(window.location.search);
+  const roomParam=params.get('room');
+
+  if(roomParam&&ROOMS.find(r=>r.id===roomParam)){
+    // Dibuka dari QR code → langsung ke form ruangan
+    await openRoom(roomParam);
+  } else {
+    // Baca tab terakhir dari sessionStorage
+    const lastView=sessionStorage.getItem('lastView')||'dashboard';
+    // Form tidak direstore (data belum tersimpan saat refresh)
+    const safeView=lastView==='form'?'dashboard':lastView;
+    navigate(safeView);
+  }
+
   if(getNotifStatus()==='granted') initNotif();
 })();
 </script>
