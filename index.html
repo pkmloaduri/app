@@ -842,7 +842,7 @@ function setRekapSearch(val) {
   });
   if(filtered.length>0) S.rekapRoomId=filtered[0].id;
 
-  // Update hanya dropdown, TIDAK re-render seluruh halaman
+  // Update HANYA dropdown — jangan re-render seluruh halaman
   const sel=document.getElementById('rekapRoomSel');
   if(sel){
     sel.innerHTML=filtered.length>0
@@ -855,6 +855,7 @@ function setRekapSearch(val) {
   if(!S.rekapCache[key]) loadRekap();
   else renderRekap();
 }
+
 async function changeMonth(val){ S.selectedMonth=val; await loadRekap(); }
 
 function getMonthlyData(roomId, ym) {
@@ -1139,7 +1140,7 @@ function renderRekap(c) {
       <button class="lantai-tab${S.rekapLantaiFilter==='Lt 2'?' active':''}" onclick="setLantaiFilter('Lt 2')">Lt 2</button>
     </div>
     <input type="search" class="room-search" placeholder="🔍 Cari ruangan..."
-      value="${S.rekapSearch}" oninput="S.rekapSearch=this.value;setRekapSearch(this.value)"
+      value="${S.rekapSearch}" oninput="S.rekapSearch=this.value;setRekapSearch(this.value)" id="rekapSearchInput"
 id="rekapSearchInput">
   </div>
 
