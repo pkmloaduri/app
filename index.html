@@ -1163,7 +1163,7 @@ id="rekapSearchInput">
 // ---- QR ----
 function renderQR(c) {
   const baseUrl='https://puskesmas-loaduri.vercel.app';
-  let html=`<div class="page-title">📱 QR Code Ruangan</div><div class="qr-info">⚠ Pastikan <b>baseUrl</b> di kode sudah sesuai URL Vercel kamu.</div>`;
+  let html=`<div class="page-title">📱 QR Code Ruangan</div><div class="qr-info"></div>`;
   ROOMS.forEach(room=>{ const url=`${baseUrl}?room=${room.id}`, qrSrc=`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(url)}&size=300x300&bgcolor=ffffff&margin=8`; html+=`<div class="qr-card"><img class="qr-img" src="${qrSrc}" width="76" height="76" id="qr-${room.id}"><div style="flex:1"><div class="qr-room-name">${room.emoji} ${room.name}</div><div class="qr-room-meta">${room.kode} · ${room.lokasi}</div><div class="qr-url">${url}</div><button class="qr-dl-btn" id="dl-${room.id}" onclick="downloadQR('${room.id}','${room.name}')">⬇ Unduh QR</button></div></div>`; });
   html+=`<div class="deploy-card"><div class="deploy-title">🚀 Cara Deploy & Pasang QR</div><ol class="deploy-steps"><li>Upload file HTML ini ke <b>GitHub</b></li><li>Hubungkan repo ke <b>Vercel</b> → auto-deploy</li><li>Salin URL Vercel, ganti <code>baseUrl</code> di kode, commit ulang</li><li>Screenshot QR tiap ruangan → print ukuran <b>A5</b></li><li>Laminating &amp; tempel di dinding tiap ruangan</li></ol></div>`;
   c.innerHTML=html;
